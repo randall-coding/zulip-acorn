@@ -1,0 +1,78 @@
+containers: {
+    database: {
+        image: "zulip/zulip-postgresql:14"
+        ports: expose: "5432/tcp"
+        env: {
+            POSTGRES_DB: "zulip"
+            POSTGRES_USER: "zulip"
+            POSTGRES_PASSWORD: "REPLACE_WITH_SECURE_POSTGRES_PASSWORD"
+        }
+    }
+
+    memcached: {
+        image: "memcached:alpine"
+        ports: expose: "11211/tcp"
+        env: {
+            SASL_CONF_PATH: "/home/memcache/memcached.conf"
+            MEMCACHED_SASL_PWDB: "/home/memcache/memcached-sasl-db"
+            MEMCACHED_PASSWORD: "REPLACE_WITH_SECURE_MEMCACHED_PASSWORD" 
+            HOSTNAME: "@{service.zulip.endpoint}"
+        }
+        dirs: {"/home/memcached/entrypoint_new.sh": "./entrypoint_memcached.sh"}
+        // cmd: ["sh", "-euc", "echo 'mech_list: plain' > \"/home/memcache/memcached.conf\"", "&&", "echo \"zulip@@{service.zulip.endpoint}:REPLACE_WITH_SECURE_MEMCACHED_PASSWORD\" > \"/home/memcache/memcached-sasl-db\"", "&&", "echo \"zulip@localhost:REPLACE_WITH_SECURE_MEMCACHED_PASSWORD\" >> \"/home/memcache/memcached-sasl-db\"", "&&", "exec memcached -S"]
+        entrypoint: ["sh", "-c", "echo 'mech_list: plain' > /home/memcache/memcached.conf && echo zulip@localhost:REPLACE_WITH_SECURE_MEMCACHED_PASSWORD > /home/memcache/memcached-sasl-db && echo zulip@$HOSTNAME:REPLACE_WITH_SECURE_MEMCACHED_PASSWORD >> /home/memcache/memcached-sasl-db && echo zulip:REPLACE_WITH_SECURE_MEMCACHED_PASSWORD >> /home/memcache/memcached-sasl-db && exec memcached -S"]
+        // entrypoint: ["/home/memcached/entrypoint_new.sh"]
+    }
+
+    rabbitmq: {
+        image: "rabbitmq:3.7.7"
+        ports: expose: "5672/tcp"
+        env: {
+            RABBITMQ_DEFAULT_USER: "zulip"
+            RABBITMQ_DEFAULT_PASS: "REPLACE_WITH_SECURE_RABBITMQ_PASSWORD"
+        }
+    }
+
+    zulip: {
+        image: "zulip/docker-zulip:8.1-0"
+        // build: {
+        //     context: "."
+        // }
+        ports: publish: "80/http" // "80/http"
+        env: {
+            DB_HOST: "database"
+            DB_HOST_PORT: "5432"
+            DB_USER: "zulip"
+            SSL_CERTIFICATE_GENERATION: "self-signed"
+            SETTING_MEMCACHED_LOCATION: "memcached:11211"
+            SETTING_RABBITMQ_HOST: "rabbitmq"
+            SETTING_REDIS_HOST:  "@{service.redis.address}" // "redis"
+            SECRETS_email_password: "123456789"
+
+            SECRETS_rabbitmq_password: "REPLACE_WITH_SECURE_RABBITMQ_PASSWORD"
+            SECRETS_postgres_password: "REPLACE_WITH_SECURE_POSTGRES_PASSWORD"
+            SECRETS_memcached_password: "REPLACE_WITH_SECURE_MEMCACHED_PASSWORD"
+            // SECRETS_redis_password: "REPLACE_WITH_SECURE_REDIS_PASSWORD"
+            SECRETS_redis_password: "@{service.redis.secrets.admin.token}"
+            SECRETS_secret_key: "REPLACE_WITH_SECURE_SECRET_KEY"
+            SETTING_EXTERNAL_HOST: "@{service.zulip.endpoint}"    //"localhost.localdomain"
+            SETTING_ZULIP_ADMINISTRATOR: "admin@example.com"
+            SETTING_EMAIL_HOST: ""
+            SETTING_EMAIL_HOST_USER: "noreply@example.com"
+            SETTING_EMAIL_PORT: "587"
+
+            SETTING_EMAIL_USE_SSL: "False"
+            SETTING_EMAIL_USE_TLS: "True"
+            ZULIP_AUTH_BACKENDS: "EmailAuthBackend"
+            DISABLE_HTTPS: "true"
+        }
+        memory: 2Gi
+
+        dependsOn: ["redis", "rabbitmq", "memcached", "database"]
+    }
+}
+
+
+services: redis: {
+    image: "ghcr.io/acorn-io/redis:v7.#.#-#"
+}
